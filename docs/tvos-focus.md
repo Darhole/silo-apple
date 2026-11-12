@@ -164,6 +164,15 @@ bar only for a short window while it hands focus down to the page, so the
 engine's repair from the resigning tab cannot land back in the bar. The pages'
 first-row Up handlers remain as a fallback for that window.
 
+A page that floats its own modal panel over its content, such as a
+library's Sort or Filter panel, must keep the bar out while the panel is
+open. Disabling the page behind the panel is not enough: the bar sits
+outside the page, so Up from the panel's first row lands on a tab and opens
+that tab's menu over the panel. Apply `tvPageOverlayOwnsFocus(_:)` with the
+panel's open state; the shell disables the bar until it closes. While the
+bar is disabled, the focus watchdog's top-menu repair asks the engine to
+re-resolve instead, since the panel's rows are the only targets.
+
 The top menu has three conceptual states:
 
 - `closed`: no panel is visible; focus belongs to content or the bar.

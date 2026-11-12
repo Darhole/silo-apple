@@ -24,6 +24,27 @@ struct TVTopMenuAnchorKey: PreferenceKey {
     }
 }
 
+/// True while a root page shows its own modal panel over its content, such
+/// as a library's Sort or Filter panel. The shell disables the bar while it
+/// is set: the panel is the zone's only focus owner, and a focusable bar
+/// above it would let Up or an overshooting swipe leave the panel for a tab,
+/// which opens that tab's menu over the still-open panel.
+struct TVPageOverlayOwnsFocusKey: PreferenceKey {
+    static let defaultValue = false
+
+    static func reduce(value: inout Bool, nextValue: () -> Bool) {
+        value = value || nextValue()
+    }
+}
+
+extension View {
+    /// Marks this page's modal panel as open so the shell's top bar cannot
+    /// take focus from it. See `TVPageOverlayOwnsFocusKey`.
+    func tvPageOverlayOwnsFocus(_ isOpen: Bool) -> some View {
+        preference(key: TVPageOverlayOwnsFocusKey.self, value: isOpen)
+    }
+}
+
 /// A library content type that can surface as a root tab (Skyline §3.1).
 /// Tabs represent types, not server libraries — a type's tab appears only
 /// if the profile can see at least one library of that type.
@@ -142,6 +163,9 @@ struct TVTopMenuBar: View {
     /// The bar is disabled then so the engine's repair from the resigning tab
     /// cannot land back in the bar and cancel the hand-down.
     var isLockedForContentHandoff: Bool = false
+    /// True while the page shows its own modal panel (Sort, Filter). The bar
+    /// is disabled then so focus stays in the panel until it closes.
+    var isLockedForPageOverlay: Bool = false
     let focusRequest: Int
     /// Bumped when the shell has determined the bar's `@FocusState` is stale —
     /// the engine dropped focus without the bar observing it, so no suppression
@@ -249,7 +273,7 @@ struct TVTopMenuBar: View {
         // has to be `.userInitiated` for a directional move to honor it.
         .defaultFocus($focusedItem, .root(selectedRoot), priority: .userInitiated)
         .focusSection()
-        .disabled(isLockedForContentHandoff || panelEntersFocus)
+        .disabled(isLockedForContentHandoff || isLockedForPageOverlay || panelEntersFocus)
         // Menu handling must not be conditionally wrapped around the focused
         // tab buttons. Toggling an `onExitCommand` ancestor when `openPanel`
         // changes invalidates tvOS focus and produces the preview-open flash.

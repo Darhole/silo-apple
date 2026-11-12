@@ -108,6 +108,8 @@ struct TVMainTabView: View {
     /// Starts locked so launch focus goes to content.
     @State private var isBarLockedForContentHandoff = true
     @State private var barLockGeneration = 0
+    /// The root page has its own modal panel open (`TVPageOverlayOwnsFocusKey`).
+    @State private var pageOverlayOwnsFocus = false
     /// True while a route pushed *from the bar* (search, profile/For You
     /// panel items) is on the stack. When the stack pops back to root,
     /// focus returns to the bar — the explicit "next owner" choice
@@ -154,6 +156,9 @@ struct TVMainTabView: View {
             NavigationStack(path: $router.path) {
                 rootContent
                     .prefersDefaultFocus(router.path.isEmpty, in: shellFocusNamespace)
+                    .onPreferenceChange(TVPageOverlayOwnsFocusKey.self) { isOpen in
+                        if isOpen != pageOverlayOwnsFocus { pageOverlayOwnsFocus = isOpen }
+                    }
                     .navigationDestination(for: Route.self) { route in
                         routeContent(for: route)
                     }
@@ -167,6 +172,7 @@ struct TVMainTabView: View {
                     isMenuFocused: $isTopMenuFocused,
                     isFocusSuppressed: isTopMenuFocusSuppressed,
                     isLockedForContentHandoff: isBarLockedForContentHandoff,
+                    isLockedForPageOverlay: pageOverlayOwnsFocus,
                     focusRequest: topMenuFocusRequest,
                     focusResetRequest: topMenuFocusResetRequest,
                     focusRequestTarget: panelReturnFocus,
@@ -397,6 +403,11 @@ struct TVMainTabView: View {
             closePanelForContentHandoff()
             suppressTopMenuFocusForContentHandoff()
             contentFocusRequest += 1
+        case .topMenu where pageOverlayOwnsFocus:
+            // The bar is disabled under a page's own panel (Sort, Filter), so
+            // escalating to it would land on nothing. Let the engine re-resolve
+            // into the panel's rows instead.
+            TVFocusSystemProbe.requestFocusUpdate()
         case .topMenu:
             closePanelForContentHandoff()
             // Stay suppressed across the reset above: while the bar is

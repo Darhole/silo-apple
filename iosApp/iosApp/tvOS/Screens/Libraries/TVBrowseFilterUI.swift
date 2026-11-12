@@ -146,6 +146,7 @@ struct TVBrowseSortPanel: View {
                 }
                 .buttonStyle(TVBrowsePanelRowStyle())
                 .focused($focusedSort, equals: key)
+                .prefersDefaultFocus(key == current, in: sortFocusScope)
             }
         }
         .padding(14)

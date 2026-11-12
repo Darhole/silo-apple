@@ -118,6 +118,8 @@ struct TVLibraryGridView: View {
             }
         }
         .environment(\.browseLibraryId, libraryId)
+        // The panel is modal: keep the top bar from taking focus above it.
+        .tvPageOverlayOwnsFocus(openPanel != nil)
         .animation(.easeOut(duration: 0.18), value: openPanel)
         .siloBackground()
         .task {
