@@ -638,6 +638,11 @@ struct TVMainTabView: View {
                 anchor: UnitPoint(x: anchorX, y: 0)
             )
             .allowsHitTesting(isActive)
+            // A closed panel stays mounted but invisible. Left enabled, the
+            // focus engine treats the page controls under it as covered: a
+            // six-library Movies menu hid the top Sort rows, so Down from
+            // Title skipped to Year.
+            .disabled(!isActive)
             .accessibilityHidden(!isActive)
             .animation(
                 reduceMotion ? nil : .easeOut(duration: SiloTheme.Skyline.topMenuPanelOpenDuration),

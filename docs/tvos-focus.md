@@ -173,6 +173,11 @@ panel's open state; the shell disables the bar until it closes. While the
 bar is disabled, the focus watchdog's top-menu repair asks the engine to
 re-resolve instead, since the panel's rows are the only targets.
 
+The bar's own menus stay mounted when closed, so opening one never inserts
+a focus subtree. A closed menu is invisible but still covers the page, and
+while it stays enabled the focus engine treats page controls under it as
+covered and skips them. Disable a closed menu as well as hiding it.
+
 The top menu has three conceptual states:
 
 - `closed`: no panel is visible; focus belongs to content or the bar.
