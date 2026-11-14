@@ -327,6 +327,11 @@ enum SiloTheme {
         /// Vertical gap between the focused row and the passive preview of
         /// the next row.
         static let rowBandPreviewSpacing: CGFloat = 10
+        /// How far the row band's viewport reaches above the band, masked, so
+        /// the row above the focused one stays loaded at rest. Keep it shorter
+        /// than the smallest card artwork (Compact square, about 151 pt), or a
+        /// card can take focus entirely inside the mask without scrolling in.
+        static let rowBandRevealAbove: CGFloat = 120
         /// Tighter vertical breathing room for the focused Skyline card strip.
         /// Regular rows keep the wider tvOS padding so focus lift has more
         /// space in standard scroll layouts.

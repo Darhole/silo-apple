@@ -35,6 +35,18 @@ struct TVPagePanelOpenKey: PreferenceKey {
     }
 }
 
+/// True while card focus is on a Skyline row below the first. The shell
+/// disables the bar meanwhile, so Up reaches a tab only from the first row.
+/// A quick run of Up presses can otherwise reach the bar from the second row
+/// while the first is still scrolling in and has no target yet.
+struct TVPageFocusBelowFirstRowKey: PreferenceKey {
+    static let defaultValue = false
+
+    static func reduce(value: inout Bool, nextValue: () -> Bool) {
+        value = value || nextValue()
+    }
+}
+
 /// A library content type that can surface as a root tab (Skyline §3.1).
 /// Tabs represent types, not server libraries — a type's tab appears only
 /// if the profile can see at least one library of that type.

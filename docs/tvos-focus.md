@@ -178,6 +178,17 @@ mount a new panel subtree. A closed menu is invisible but still covers the page,
 while it stays enabled the focus engine treats page controls under it as
 covered and skips them. Disable a closed menu as well as hiding it.
 
+On Home, library Browse, and For You, the Skyline feed publishes
+`TVPageFocusBelowFirstRowKey` while card focus is below the first row, and the
+shell disables the bar for that too, so Up reaches the bar only from the first
+row and a quick run of Up presses can't skip it. Explicit bar claims lift it.
+The Watch Party picker's chrome has no such lock.
+
+The feed's viewport reaches a little above the band, masked, so the row above
+the focused one stays loaded at rest. A quick run of Up presses can still
+outrun it, and the last press then does nothing. While the menu holds focus,
+the rows above the one focus left are disabled, so Down returns to that row.
+
 The top menu has three conceptual states:
 
 - `closed`: no panel is visible; focus belongs to content or the bar.
