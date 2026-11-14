@@ -112,6 +112,10 @@ struct TVMainTabView: View {
     /// (`TVPagePanelOpenKey`), so Up from the panel's first row stays in the
     /// panel. An explicit bar claim (`focusTopMenuIfVisible`) lifts it.
     @State private var isBarLockedByPagePanel = false
+    /// Disables the bar while focus is on a page row below the first
+    /// (`TVPageFocusBelowFirstRowKey`), so Up only enters the bar from the
+    /// first row. An explicit bar claim lifts it like the panel lock.
+    @State private var isBarLockedByLowerRow = false
     /// True while a route pushed *from the bar* (search, profile/For You
     /// panel items) is on the stack. When the stack pops back to root,
     /// focus returns to the bar — the explicit "next owner" choice
@@ -161,6 +165,9 @@ struct TVMainTabView: View {
                     .onPreferenceChange(TVPagePanelOpenKey.self) { isOpen in
                         isBarLockedByPagePanel = isOpen
                     }
+                    .onPreferenceChange(TVPageFocusBelowFirstRowKey.self) { isBelow in
+                        isBarLockedByLowerRow = isBelow
+                    }
                     .navigationDestination(for: Route.self) { route in
                         routeContent(for: route)
                     }
@@ -173,7 +180,7 @@ struct TVMainTabView: View {
                     currentProfile: currentProfile,
                     isMenuFocused: $isTopMenuFocused,
                     isFocusSuppressed: isTopMenuFocusSuppressed,
-                    isLockedForContentHandoff: isBarLockedForContentHandoff || isBarLockedByPagePanel,
+                    isLockedForContentHandoff: isBarLockedForContentHandoff || isBarLockedByPagePanel || isBarLockedByLowerRow,
                     focusRequest: topMenuFocusRequest,
                     focusResetRequest: topMenuFocusResetRequest,
                     focusRequestTarget: panelReturnFocus,
@@ -1220,6 +1227,7 @@ struct TVMainTabView: View {
         // still need the bar, so an explicit claim lifts that lock too, until
         // the panel closes.
         isBarLockedByPagePanel = false
+        isBarLockedByLowerRow = false
         // Claim ownership before the bar's @FocusState lands so content
         // hand-down tokens cannot briefly re-focus rows during an Up return.
         isTopMenuFocused = true

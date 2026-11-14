@@ -50,6 +50,13 @@ struct TVSkylineSectionFeed: View {
     /// The row that owns card focus or its context-menu dismissal flow. Unlike
     /// the marquee preview, this is cleared when focus moves into chrome.
     @State private var focusRestorationOwnerSectionId: String?
+    /// Whether card focus is on a row below the first. Its own state, written
+    /// only when it flips, so moving between rows doesn't re-evaluate this body.
+    @State private var isFocusBelowFirstRow = false
+    /// The last row that held card focus, read only from callbacks.
+    @State private var lastFocusedSectionId: String?
+    /// The row Down from the menu returns to; rows above it are disabled meanwhile.
+    @State private var menuReturnSectionId: String?
     /// The card the marquee content was last built from, kept so a spoiler
     /// settings change can rebuild it. The settings load after sign-in and
     /// can land after Home has already seeded the marquee.
@@ -85,8 +92,8 @@ struct TVSkylineSectionFeed: View {
         ZStack(alignment: .top) {
             TVSkylineBackdrop(model: marqueeModel)
 
-            // Native scrolling lives only in the bottom row band. The viewport
-            // clips at its top edge so rows do not paint through the marquee
+            // Native scrolling lives only in the bottom row band. Rows are
+            // masked at its top edge so they do not paint through the marquee
             // title, description, and metadata while they scroll upward.
             scrollingRows
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -97,6 +104,7 @@ struct TVSkylineSectionFeed: View {
             .offset(y: SiloTheme.Skyline.landingContentVerticalOffset)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .preference(key: TVPageFocusBelowFirstRowKey.self, value: isFocusBelowFirstRow)
         .environment(\.browseLibraryId, marqueeModel.libraryId)
         .onAppear {
             marqueeModel.resume()
@@ -107,12 +115,14 @@ struct TVSkylineSectionFeed: View {
         .onChange(of: focusRequest) { _, request in requestEntryFocus(request) }
         .onChange(of: isTopMenuFocused) { _, isFocused in
             if isFocused {
-                focusRestorationOwnerSectionId = nil
+                noteFocusedRow(nil)
             }
+            menuReturnSectionId = isFocused ? lastFocusedSectionId : nil
         }
         // Rows mount only after the async section load; a deferred entry
         // token re-fires once they exist.
         .onChange(of: sections.map(\.id)) { _, _ in
+            updateFocusBelowFirstRow()
             seedMarqueeFromFirstItem()
             if let pending = pendingFocusRequest { requestEntryFocus(pending) }
         }
@@ -136,7 +146,7 @@ struct TVSkylineSectionFeed: View {
 
     // MARK: - Rows
 
-    /// Native vertical row scrolling, clipped to the lower band so rows always
+    /// Native vertical row scrolling, masked to the lower band so rows always
     /// appear from the same bottom area and disappear before the marquee text.
     @ViewBuilder
     private var scrollingRows: some View {
@@ -151,6 +161,9 @@ struct TVSkylineSectionFeed: View {
                 max(0, proxy.size.height - bandHeight + SiloTheme.Skyline.landingContentVerticalOffset)
             )
             let visibleBandHeight = max(0, proxy.size.height - bandTop)
+            // The viewport reaches this far above the band, masked; a matching
+            // top content margin keeps rows resting at the band's top edge.
+            let reveal = min(SiloTheme.Skyline.rowBandRevealAbove, bandTop)
             let trailingPreviewPadding = max(
                 0,
                 visibleBandHeight - SiloTheme.Skyline.rowBandBottomInset
@@ -181,10 +194,13 @@ struct TVSkylineSectionFeed: View {
             .onScrollPhaseChange { _, phase in
                 marqueeModel.setBackdropDeferred(phase != .idle)
             }
+            .contentMargins(.top, reveal, for: .scrollContent)
             .modifier(TVMenuEntryScroll(request: lastAppliedRequest, isTopMenuFocused: isTopMenuFocused, onReady: claimEntryFocus))
-            .frame(width: proxy.size.width, height: visibleBandHeight, alignment: .topLeading)
-            .clipped()
-            .padding(.top, bandTop)
+            .frame(width: proxy.size.width, height: visibleBandHeight + reveal, alignment: .topLeading)
+            .mask(alignment: .bottom) {
+                Rectangle().frame(height: visibleBandHeight)
+            }
+            .padding(.top, bandTop - reveal)
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
         }
     }
@@ -218,11 +234,11 @@ struct TVSkylineSectionFeed: View {
             // Every other vertical move remains native.
             onMoveUp: isFirstRow ? onTopMenuFocusRequest : nil,
             onItemFocus: { item in
-                focusRestorationOwnerSectionId = section.id
+                noteFocusedRow(section.id)
                 previewFocusedItem(item, in: section)
             },
             // The marquee keeps the last card it previewed.
-            onExploreAllFocus: { focusRestorationOwnerSectionId = section.id },
+            onExploreAllFocus: { noteFocusedRow(section.id) },
             cardWidth: SiloTheme.Skyline.densePosterCardWidth,
             cardVerticalPadding: SiloTheme.Skyline.rowBandCardVerticalPadding,
             focusRestorationOwner: Binding(
@@ -237,6 +253,7 @@ struct TVSkylineSectionFeed: View {
                 }
             )
         )
+        .disabled(index < disabledRowCount)
         .modifier(TVSkylineArtworkVisibility(onVisible: { warmRows(after: index) }))
     }
 
@@ -254,6 +271,30 @@ struct TVSkylineSectionFeed: View {
     }
 
     // MARK: - Focus
+
+    private func rowIndex(of sectionId: String?) -> Int? {
+        sectionId.flatMap { id in sections.firstIndex { $0.id == id } }
+    }
+
+    /// How many leading rows are disabled while the menu holds focus.
+    private var disabledRowCount: Int { rowIndex(of: menuReturnSectionId) ?? 0 }
+
+    /// Records the row that took card focus; nil when focus moves to the bar.
+    private func noteFocusedRow(_ sectionId: String?) {
+        focusRestorationOwnerSectionId = sectionId
+        if let sectionId {
+            lastFocusedSectionId = sectionId
+            // Card focus re-enables every row, including after a menu claim that never landed.
+            if menuReturnSectionId != nil { menuReturnSectionId = nil }
+        }
+        updateFocusBelowFirstRow()
+    }
+
+    /// Re-derives the bar lock from the focused row; also run when rows change.
+    private func updateFocusBelowFirstRow() {
+        let isBelow = (rowIndex(of: focusRestorationOwnerSectionId) ?? 0) > 0
+        if isFocusBelowFirstRow != isBelow { isFocusBelowFirstRow = isBelow }
+    }
 
     /// Entry focus → the first row's first card. Tokens that arrive before
     /// the rows mount wait as a pending claim. A claim is dropped while the
